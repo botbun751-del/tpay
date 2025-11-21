@@ -4,11 +4,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, type DefaultValues } from "react-hook-form";
 import { z } from "zod";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -53,6 +52,30 @@ const titles: Record<AuthView, { title: string; description: string; action: str
   },
 };
 
+function RenderField({
+  field,
+  label,
+  placeholder,
+  type = "text",
+  errors,
+  form,
+}: {
+  field: string;
+  label: string;
+  placeholder?: string;
+  type?: string;
+  errors: Record<string, any>;
+  form: any;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={field}>{label}</Label>
+      <Input id={field} type={type} placeholder={placeholder} {...form.register(field)} />
+      {errors[field] && <p className="text-sm text-destructive">{errors[field]?.message as string}</p>}
+    </div>
+  );
+}
+
 export function AuthCard<T extends AuthView>({ view, token }: AuthCardProps<T>) {
   if (view === "reset" && !token) {
     return (
@@ -66,12 +89,28 @@ export function AuthCard<T extends AuthView>({ view, token }: AuthCardProps<T>) 
   }
 
   const schema = schemaMap[view];
+  // Get the correct fields for this schema using Object.keys(schema.shape)
+  const fieldKeys = Object.keys((schema as any).shape ?? {});
+
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
+  let defaultValues: DefaultValues<any>;
+  if (view === "signup") {
+    defaultValues = { name: "", email: "", password: "" };
+  } else if (view === "signin") {
+    defaultValues = { email: "", password: "" };
+  } else if (view === "forgot") {
+    defaultValues = { email: "" };
+  } else if (view === "reset") {
+    defaultValues = { token: token ?? "", password: "" };
+  } else {
+    defaultValues = {} as DefaultValues<FormValues<T>>;
+  }
+
   const form = useForm<FormValues<T>>({
     resolver: zodResolver(schema),
-    defaultValues: view === "signup" ? ({ name: "" } as FormValues<T>) : undefined,
+    defaultValues: defaultValues as DefaultValues<FormValues<T>>,
   });
 
   const onSubmit = async (values: FormValues<T>) => {
@@ -144,30 +183,18 @@ export function AuthCard<T extends AuthView>({ view, token }: AuthCardProps<T>) 
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {view === "signup" && (
-            <div className="space-y-2">
-              <Label htmlFor="name">Full name</Label>
-              <Input id="name" placeholder="Ava Streams" {...form.register("name" as const)} />
-              {errors.name && <p className="text-sm text-destructive">{errors.name.message as string}</p>}
-            </div>
+          {fieldKeys.includes("name") && (
+            <RenderField field="name" label="Full name" placeholder="Ava Streams" errors={errors} form={form} />
           )}
-
-          {["signup", "signin", "forgot"].includes(view) && (
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" placeholder="you@team.com" {...form.register("email" as const)} />
-              {errors.email && <p className="text-sm text-destructive">{errors.email.message as string}</p>}
-            </div>
+          {fieldKeys.includes("email") && (
+            <RenderField field="email" label="Email" type="email" placeholder="you@team.com" errors={errors} form={form} />
           )}
-
-          {["signup", "signin", "reset"].includes(view) && (
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" placeholder="••••••••" {...form.register("password" as const)} />
-              {errors.password && <p className="text-sm text-destructive">{errors.password.message as string}</p>}
-            </div>
+          {fieldKeys.includes("password") && (
+            <RenderField field="password" label="Password" type="password" placeholder="••••••••" errors={errors} form={form} />
           )}
-
+          {fieldKeys.includes("token") && (
+            <RenderField field="token" label="Reset Token" placeholder="Paste reset token" errors={errors} form={form} />
+          )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
             {action}
@@ -177,4 +204,3 @@ export function AuthCard<T extends AuthView>({ view, token }: AuthCardProps<T>) 
     </Card>
   );
 }
-
